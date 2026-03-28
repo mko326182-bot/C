@@ -1,4 +1,3 @@
-
 const mongoose = require('mongoose');
 const path = require('path');
 const AdmZip = require('adm-zip');
@@ -201,8 +200,8 @@ module.exports = function(app, verifyToken, verifyAdmin, upload) {
 
             await job.save();
 
-            // 🔥 Start Worker in Background (No await)
-            processTitleExtractionJob(job._id);
+            // 🔥 تم إزالة الاستدعاء المباشر للمعالج. ستتم المعالجة بواسطة Cron Job.
+            // processTitleExtractionJob(job._id);
 
             res.json({ success: true, message: "تم بدء المهمة في الخلفية", jobId: job._id });
 
@@ -724,6 +723,7 @@ module.exports = function(app, verifyToken, verifyAdmin, upload) {
             // Use System Name if no user found
             const authorName = user ? user.name : "System Scraper";
             const authorEmail = user ? user.email : "system@scraper";
+            const authorId = user ? user._id : null; // 🔥 NEW: Get User ID
 
             // 🔥 البحث باستخدام العنوانين لتجنب التكرار
             let novel = await Novel.findOne({ 
@@ -757,6 +757,7 @@ module.exports = function(app, verifyToken, verifyAdmin, upload) {
                     description: novelData.description,
                     author: authorName, 
                     authorEmail: authorEmail,
+                    authorId: authorId, // 🔥 NEW: Set authorId
                     category: novelData.category || 'أخرى',
                     tags: novelData.tags || [],
                     status: novelData.status || 'مستمرة', // Default from scraper
@@ -1031,7 +1032,9 @@ module.exports = function(app, verifyToken, verifyAdmin, upload) {
                 titleEn: titleEn || '', 
                 cover, 
                 description, 
-                author: req.user.name, authorEmail: req.user.email,
+                author: req.user.name, 
+                authorEmail: req.user.email,
+                authorId: req.user.id, // 🔥 NEW: Set authorId
                 category, tags, status: status || 'مستمرة'
             });
             await newNovel.save();
@@ -1055,6 +1058,7 @@ module.exports = function(app, verifyToken, verifyAdmin, upload) {
             if (req.user.role === 'admin') {
                 updateData.author = req.user.name;
                 updateData.authorEmail = req.user.email;
+                updateData.authorId = req.user.id; // 🔥 NEW: Set authorId
             }
             const updated = await Novel.findByIdAndUpdate(req.params.id, updateData, { new: true });
             res.json(updated);
