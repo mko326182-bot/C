@@ -1,47 +1,15 @@
 {
   "version": 2,
   "builds": [
-    {
-      "src": "backend/api/index.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "backend/cron/*.js",
-      "use": "@vercel/node"
-    }
+    { "src": "backend/api/index.js", "use": "@vercel/node" }
   ],
   "routes": [
-    {
-      "src": "/cron/(.*)",
-      "dest": "backend/cron/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "backend/api/index.js"
-    }
+    { "src": "/(.*)", "dest": "backend/api/index.js" }
   ],
   "functions": {
     "backend/api/index.js": {
       "maxDuration": 30,
       "memory": 1024
-    },
-    "backend/cron/*.js": {
-      "maxDuration": 30,
-      "memory": 1024
     }
-  },
-  "crons": [
-    {
-      "path": "/cron/translation-processor",
-      "schedule": "*/5 * * * *"
-    },
-    {
-      "path": "/cron/title-gen-processor",
-      "schedule": "*/10 * * * *"
-    },
-    {
-      "path": "/cron/title-extractor-processor",
-      "schedule": "*/15 * * * *"
-    }
-  ]
+  }
 }
