@@ -1,36 +1,26 @@
 {
   "version": 2,
   "functions": {
-    "api/index.js": {
+    "backend/api/index.js": {
       "maxDuration": 30,
       "memory": 1024
     },
-    "cron/*.js": {
+    "backend/cron/*.js": {
       "maxDuration": 30,
       "memory": 1024
     }
   },
-  "routes": [
-    {
-      "src": "/cron/(.*)",
-      "dest": "cron/$1.js"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "api/index.js"
-    }
-  ],
   "crons": [
     {
-      "path": "/cron/translation-processor",
+      "path": "/backend/cron/tranlation-processor",
       "schedule": "*/5 * * * *"
     },
     {
-      "path": "/cron/title-gen-processor",
+      "path": "/backend/cron/title-gen-processor",
       "schedule": "*/10 * * * *"
     },
     {
-      "path": "/cron/title-extractor-processor",
+      "path": "/backend/cron/title-extractor-processor",
       "schedule": "*/15 * * * *"
     }
   ]
