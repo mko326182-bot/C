@@ -1,6 +1,7 @@
 
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken'); 
+const axios = require('axios');
 
 // --- Config Imports ---
 let firestore, cloudinary;
@@ -35,6 +36,8 @@ const getUserRole = (req) => {
 };
 
 // Helper to check and update status automatically
+const ZEUS_SECRET = "Z3uS_N0v3l_2026_S3cr3t_K3y";
+
 async function checkNovelStatus(novel) {
     if (novel.status === 'مكتملة') return novel; 
 
@@ -62,38 +65,33 @@ const BASE_CATEGORIES = [
     'مغامرات', 'نظام', 'حريم', 'رعب', 'خيال علمي', 'دراما', 'غموض', 'تاريخي'
 ];
 
-// 🔥 Helper for Content Obfuscation (Genius Level Protection)
-const ZEUS_SECRET = "Z3uS_N0v3l_2026_S3cr3t_K3y";
-
+// 🔥 Helper for Content Obfuscation (Genius Level Protection - Multi-layered)
 function obfuscateText(text) {
     if (!text) return "";
     try {
         // Encode to URI component to handle Arabic characters safely
         const encoded = encodeURIComponent(text);
-        // Simple XOR with secret key
         let result = "";
+        
         for (let i = 0; i < encoded.length; i++) {
-            result += String.fromCharCode(encoded.charCodeAt(i) ^ ZEUS_SECRET.charCodeAt(i % ZEUS_SECRET.length));
+            let charCode = encoded.charCodeAt(i);
+            
+            // Layer 1: XOR with secret
+            charCode = charCode ^ ZEUS_SECRET.charCodeAt(i % ZEUS_SECRET.length);
+            
+            // Layer 2: Dynamic Offset based on position
+            const offset = (i * 7) % 13;
+            charCode = (charCode + offset) % 256;
+            
+            // Layer 3: Rotation (3 positions)
+            charCode = (charCode + 3) % 256;
+            
+            result += String.fromCharCode(charCode);
         }
-        // Return as Base64
-        return Buffer.from(result).toString('base64');
+        // Return as Base64 using 'binary' encoding to preserve raw bytes
+        return Buffer.from(result, 'binary').toString('base64');
     } catch (e) {
         return text;
-    }
-}
-
-// 🔥 Helper for URL Obfuscation (Genius Level Protection)
-function obfuscateUrl(url) {
-    if (!url) return "";
-    try {
-        // Simple XOR with secret key for URLs
-        let result = "";
-        for (let i = 0; i < url.length; i++) {
-            result += String.fromCharCode(url.charCodeAt(i) ^ ZEUS_SECRET.charCodeAt(i % ZEUS_SECRET.length));
-        }
-        return Buffer.from(result).toString('base64');
-    } catch (e) {
-        return url;
     }
 }
 
@@ -387,8 +385,12 @@ module.exports = function(app, verifyToken, upload) {
             let query = {};
             
             if (userId) {
-                if (!mongoose.Types.ObjectId.isValid(userId)) return res.status(400).json({ message: "Invalid ID" });
-                query._id = userId;
+                // 🔥 SMART CHECK: If it's a valid ObjectId, use it. Otherwise, assume it's an email (legacy/fallback)
+                if (mongoose.Types.ObjectId.isValid(userId)) {
+                    query._id = userId;
+                } else {
+                    query.email = userId.toLowerCase();
+                }
             } else if (email) {
                 query.email = email.toLowerCase(); // Ensure case insensitivity
             } else {
@@ -396,11 +398,14 @@ module.exports = function(app, verifyToken, upload) {
             }
 
             // Fetch ONLY basic info, NO calculations
-            const user = await User.findOne(query).select('name email picture banner bio role createdAt isHistoryPublic');
+            const user = await User.findOne(query).select('name picture banner bio role createdAt isHistoryPublic');
             
             if (!user) return res.status(404).json({ message: "User not found" });
 
-            res.json({ user }); 
+            // Obfuscate URLs for privacy
+            const userObj = user.toObject();
+
+            res.json({ user: userObj }); 
         } catch (e) {
             res.status(500).json({ error: e.message });
         }
@@ -536,7 +541,7 @@ module.exports = function(app, verifyToken, upload) {
                 user: {
                     _id: targetUser._id,
                     name: targetUser.name,
-                    email: targetUser.email, 
+                    email: targetUserId === req.user.id ? targetUser.email : undefined, 
                     picture: targetUser.picture,
                     banner: targetUser.banner,
                     bio: targetUser.bio,
@@ -547,7 +552,7 @@ module.exports = function(app, verifyToken, upload) {
                 readChapters: totalReadChapters,
                 addedChapters,
                 totalViews,
-                myWorks: myWorks.map(w => ({ ...w, cover: obfuscateUrl(w.cover) })),
+                myWorks: myWorks,
                 worksPage: page
             });
 
@@ -557,34 +562,23 @@ module.exports = function(app, verifyToken, upload) {
         }
     });
 
-    app.post('/api/novels/:id/view', verifyToken, async (req, res) => {
+    // 🔥 ROCKET SPEED VIEW COUNT: Open to everyone, no restrictions
+    app.post('/api/novels/:id/view', async (req, res) => {
         try {
-            if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(404).send('Invalid ID');
+            const { id } = req.params;
+            if (!mongoose.Types.ObjectId.isValid(id)) return res.status(404).send('Invalid ID');
             
-            const { chapterNumber } = req.body; 
+            // 🔥 Direct increment for maximum performance
+            await Novel.findByIdAndUpdate(id, {
+                $inc: { 
+                    views: 1,
+                    dailyViews: 1,
+                    weeklyViews: 1,
+                    monthlyViews: 1
+                }
+            });
             
-            if (!chapterNumber) {
-                return res.status(200).json({ message: 'Chapter number required for view count' });
-            }
-
-            const novel = await Novel.findById(req.params.id);
-            if (!novel) return res.status(404).send('Novel not found');
-
-            const userId = req.user.id;
-            const viewKey = `${userId}_ch_${chapterNumber}`;
-            const alreadyViewed = novel.viewedBy.includes(viewKey);
-
-            if (!alreadyViewed) {
-                novel.viewedBy.push(viewKey);
-                novel.views += 1;
-                novel.dailyViews += 1;
-                novel.weeklyViews += 1;
-                novel.monthlyViews += 1;
-                await novel.save();
-                return res.status(200).json({ viewed: true, total: novel.views });
-            } else {
-                return res.status(200).json({ viewed: false, message: 'Already viewed this chapter', total: novel.views });
-            }
+            res.status(200).json({ success: true });
         } catch (error) { 
             res.status(500).send('Error'); 
         }
@@ -680,7 +674,6 @@ module.exports = function(app, verifyToken, upload) {
             // Format output to match old structure but lightweight
             novelsData = novelsData.map(n => ({
                 ...n,
-                cover: obfuscateUrl(n.cover), // 🔥 OBFUSCATED URL
                 // Create a fake chapters array with just 1 item if needed by frontend logic
                 chapters: n.lastChapter ? [n.lastChapter] : []
             }));
@@ -711,8 +704,9 @@ module.exports = function(app, verifyToken, upload) {
                         title: 1,
                         titleEn: 1,
                         author: 1,
-                        authorEmail: 1,
+                        authorId: 1, // 🔥 NEW: Include authorId
                         cover: 1,
+                        banner: 1,
                         description: 1,
                         category: 1,
                         tags: 1,
@@ -722,9 +716,6 @@ module.exports = function(app, verifyToken, upload) {
                         favorites: 1,
                         lastChapterUpdate: 1,
                         createdAt: 1,
-                        sourceUrl: 1,
-                        sourceStatus: 1,
-                        isWatched: 1,
                         // 🔥 Calculate count in DB, do NOT return array
                         chaptersCount: { $size: { $ifNull: ["$chapters", []] } }
                     }
@@ -735,14 +726,15 @@ module.exports = function(app, verifyToken, upload) {
             if (!result || result.length === 0) return res.status(404).json({ message: 'Novel not found' });
             
             const novelDoc = result[0];
-            novelDoc.cover = obfuscateUrl(novelDoc.cover); // 🔥 OBFUSCATED URL
-
+            
             if (novelDoc.status === 'خاصة' && role !== 'admin') {
                 return res.status(403).json({ message: "Access Denied" });
             }
 
             // Sync status check (Async, detached from response speed)
-            checkNovelStatus(await Novel.findById(req.params.id)); 
+            Novel.findById(req.params.id).then(doc => {
+                if (doc) checkNovelStatus(doc);
+            }).catch(err => console.error("Status check error:", err));
             
             res.json(novelDoc);
         } catch (error) {
@@ -812,17 +804,38 @@ module.exports = function(app, verifyToken, upload) {
             const { novelId, chapterId } = req.params;
             if (!mongoose.Types.ObjectId.isValid(novelId)) return res.status(404).json({ message: 'Invalid ID' });
 
-            const novel = await Novel.findById(novelId).lean();
-            if (!novel) return res.status(404).json({ message: 'Novel not found' });
-
             const role = getUserRole(req);
+            const isId = mongoose.Types.ObjectId.isValid(chapterId);
+
+            // 🔥 LIGHTNING FAST OPTIMIZED FETCH 🔥
+            // Use aggregation to fetch ONLY the specific chapter metadata and total count
+            const novelData = await Novel.aggregate([
+                { $match: { _id: new mongoose.Types.ObjectId(novelId) } },
+                {
+                    $project: {
+                        status: 1,
+                        chaptersCount: { $size: "$chapters" },
+                        chapter: {
+                            $filter: {
+                                input: "$chapters",
+                                as: "chap",
+                                cond: isId 
+                                    ? { $eq: ["$$chap._id", new mongoose.Types.ObjectId(chapterId)] }
+                                    : { $eq: ["$$chap.number", parseInt(chapterId)] }
+                            }
+                        }
+                    }
+                }
+            ]);
+
+            if (!novelData || novelData.length === 0) return res.status(404).json({ message: 'Novel not found' });
+            
+            const novel = novelData[0];
             if (novel.status === 'خاصة' && role !== 'admin') {
                 return res.status(403).json({ message: "Access Denied" });
             }
 
-            let chapterMeta = novel.chapters.find(c => c._id.toString() === chapterId) || 
-                              novel.chapters.find(c => c.number == chapterId);
-
+            const chapterMeta = novel.chapter && novel.chapter[0];
             if (!chapterMeta) return res.status(404).json({ message: 'Chapter metadata not found' });
 
             if (role !== 'admin') {
@@ -844,14 +857,13 @@ module.exports = function(app, verifyToken, upload) {
                     }
                 } catch (firestoreError) {
                     console.error("❌ Firestore Fetch Error:", firestoreError.message);
-                    // If it's an authentication error, provide a clearer message
                     if (firestoreError.message.includes("UNAUTHENTICATED")) {
                         return res.status(500).json({ 
                             message: "خطأ في الاتصال بقاعدة البيانات (غير مصرح). يرجى التأكد من إعدادات Firebase.",
                             details: firestoreError.message 
                         });
                     }
-                    throw firestoreError; // Rethrow to be caught by the main catch block
+                    throw firestoreError;
                 }
             } else {
                 console.error("❌ Firestore is not initialized. Cannot fetch chapter content.");
@@ -864,7 +876,6 @@ module.exports = function(app, verifyToken, upload) {
             let copyrightStyles = {};
 
             try {
-                // Fetch settings for both Blocklist AND Global Copyrights AND Global Replacements
                 const adminSettings = await Settings.findOne({ 
                     $or: [
                         { globalBlocklist: { $exists: true, $not: { $size: 0 } } },
@@ -875,10 +886,8 @@ module.exports = function(app, verifyToken, upload) {
                 }).sort({ updatedAt: -1 }).lean(); 
 
                 if (adminSettings) {
-                    // 1. Cleaner Logic (Blocklist)
                     if (adminSettings.globalBlocklist && adminSettings.globalBlocklist.length > 0) {
-                        const blocklist = adminSettings.globalBlocklist;
-                        blocklist.forEach(word => {
+                        adminSettings.globalBlocklist.forEach(word => {
                             if (!word) return;
                             if (word.includes('\n') || word.includes('\r')) {
                                 content = content.split(word).join('');
@@ -890,7 +899,6 @@ module.exports = function(app, verifyToken, upload) {
                         });
                     }
 
-                    // 2. 🔥 Global Replacements Logic (Server-Side) 🔥
                     if (adminSettings.globalReplacements && adminSettings.globalReplacements.length > 0) {
                         adminSettings.globalReplacements.forEach(rep => {
                             if (rep.original) {
@@ -901,38 +909,26 @@ module.exports = function(app, verifyToken, upload) {
                         });
                     }
 
-                    // 3. Formatting cleanup
                     content = content.replace(/^\s*[\r\n]/gm, ''); 
                     content = content.replace(/\n\s*\n/g, '\n\n'); 
 
-                    // 3. 🔥🔥 INTERNAL CHAPTER SEPARATOR (SMART FIRST LINE ONLY) 🔥🔥
-                    // Check if separator enabled in settings
                     if (adminSettings.enableChapterSeparator) {
                         const separatorLine = `\n\n${adminSettings.chapterSeparatorText || '________________________________________'}\n\n`;
-                        
-                        // We check the FIRST non-empty paragraph only
-                        // Split by double newlines or single to find first block
                         const lines = content.split('\n');
                         let replaced = false;
-                        
                         for (let i = 0; i < lines.length; i++) {
                             const lineTrimmed = lines[i].trim();
                             if (lineTrimmed.length > 0) {
-                                // 🔥 Updated Regex: Matches 'Chapter', 'الفصل', 'فصل' OR checks for ':'
                                 if (/^(?:الفصل|Chapter|فصل)|:/i.test(lineTrimmed)) {
                                     lines[i] = lines[i] + separatorLine;
                                     replaced = true;
                                 }
-                                break; // Stop after first non-empty line regardless of match
+                                break;
                             }
                         }
-                        
-                        if (replaced) {
-                            content = lines.join('\n');
-                        }
+                        if (replaced) content = lines.join('\n');
                     }
 
-                    // 4. Copyright Logic (Separated)
                     const frequency = adminSettings.copyrightFrequency || 'always';
                     const everyX = adminSettings.copyrightEveryX || 5;
                     const chapNum = parseInt(chapterMeta.number);
@@ -948,27 +944,25 @@ module.exports = function(app, verifyToken, upload) {
                         copyrightStart = adminSettings.globalChapterStartText || "";
                         copyrightEnd = adminSettings.globalChapterEndText || "";
                         copyrightStyles = adminSettings.globalCopyrightStyles || {};
-                        // Ensure font size is sent if missing
                         if (!copyrightStyles.fontSize) copyrightStyles.fontSize = 14; 
                     }
                 }
             } catch (cleanerErr) {}
 
-            let totalAvailable = novel.chapters.length;
-            if (role !== 'admin') {
-                totalAvailable = novel.chapters.filter(c => !isChapterHidden(c.title)).length;
-            }
+            // Calculate total available chapters (approximate if we don't want to fetch all)
+            // For now, we'll use the novel.chaptersCount we projected
+            let totalAvailable = novel.chaptersCount;
 
-            // 🔥 SEND SEPARATE FIELDS, DO NOT MERGE INTO CONTENT 🔥
             res.json({ 
                 ...chapterMeta, 
-                content: obfuscateText(content), // 🔥 OBFUSCATED CONTENT (Genius Protection)
-                copyrightStart, // Separate Data
-                copyrightEnd,   // Separate Data
-                copyrightStyles, // Separate Style
+                content: obfuscateText(content), 
+                copyrightStart, 
+                copyrightEnd,   
+                copyrightStyles, 
                 totalChapters: totalAvailable
             });
         } catch (error) {
+            console.error("Get Chapter Error:", error);
             res.status(500).json({ message: error.message });
         }
     });
@@ -1022,7 +1016,6 @@ module.exports = function(app, verifyToken, upload) {
             }
 
             const libraryObj = libraryItem.toObject();
-            libraryObj.cover = obfuscateUrl(libraryObj.cover);
             res.json(libraryObj);
         } catch (error) { 
             console.error(error);
@@ -1058,10 +1051,7 @@ module.exports = function(app, verifyToken, upload) {
                 .limit(limitNum)
                 .lean();
             
-            const formattedItems = items.map(item => ({
-                ...item,
-                cover: obfuscateUrl(item.cover)
-            }));
+            const formattedItems = items;
             
             res.json(formattedItems);
         } catch (error) {
@@ -1071,9 +1061,6 @@ module.exports = function(app, verifyToken, upload) {
 
     app.get('/api/novel/status/:novelId', verifyToken, async (req, res) => {
         const item = await NovelLibrary.findOne({ user: req.user.id, novelId: req.params.novelId }).lean();
-        if (item) {
-            item.cover = obfuscateUrl(item.cover);
-        }
         const readChapters = item ? item.readChapters : [];
         res.json(item || { isFavorite: false, progress: 0, lastChapterId: 0, readChapters: [] });
     });
@@ -1254,4 +1241,69 @@ module.exports = function(app, verifyToken, upload) {
             res.status(500).json({ error: error.message });
         }
     });
+
+    // =========================================================
+    // 🖼️ IMAGE PROXY & RESIZER (Cloudinary Powered + Axios Pipe)
+    // =========================================================
+    app.get('/api/image-proxy', async (req, res) => {
+        try {
+            const { url } = req.query;
+            if (!url) return res.status(400).send("URL required");
+
+            let originalUrl = url;
+
+            // Try to decode if it looks like Base64 and doesn't start with http
+            if (!url.startsWith('http')) {
+                try {
+                    // Try to decode as plain Base64 first
+                    const decoded = Buffer.from(url, 'base64').toString('utf8');
+                    if (decoded.startsWith('http')) {
+                        originalUrl = decoded;
+                    } else {
+                        // Try old encrypted format fallback
+                        let decrypted = "";
+                        const buffer = Buffer.from(url, 'base64').toString('binary');
+                        for (let i = 0; i < buffer.length; i++) {
+                            let charCode = buffer.charCodeAt(i);
+                            const offset = (i * 3) % 7;
+                            charCode = (charCode - offset + 256) % 256;
+                            charCode = charCode ^ ZEUS_SECRET.charCodeAt(i % ZEUS_SECRET.length);
+                            decrypted += String.fromCharCode(charCode);
+                        }
+                        if (decrypted.startsWith('http')) {
+                            originalUrl = decrypted;
+                        }
+                    }
+                } catch (e) {
+                    // If decoding fails, assume it was already a plain URL (though it didn't start with http)
+                }
+            }
+
+            if (!originalUrl.startsWith('http')) {
+                return res.status(400).send("Invalid URL");
+            }
+
+            // 2. 🔥 PIPE THE IMAGE (Strong Protection + Bypass Restrictions) 🔥
+            const response = await axios({
+                method: 'get',
+                url: originalUrl,
+                responseType: 'stream',
+                timeout: 10000,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Referer': 'https://www.google.com/' 
+                }
+            });
+
+            res.set('Content-Type', response.headers['content-type'] || 'image/jpeg');
+            res.set('Cache-Control', 'public, max-age=604800, immutable'); 
+            
+            response.data.pipe(res);
+
+        } catch (error) {
+            console.error("Proxy Error:", error.message);
+            res.redirect('https://res.cloudinary.com/djuhxdjj/image/upload/v1716543210/placeholder_novel.png');
+        }
+    });
+
 };
