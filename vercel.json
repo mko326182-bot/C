@@ -1,14 +1,15 @@
 {
   "version": 2,
   "builds": [
-    { "src": "backend/index.js", "use": "@vercel/node" },
-    { "src": "backend/cron/*.js", "use": "@vercel/node" }
+    {
+      "src": "backend/index.js",
+      "use": "@vercel/node"
+    }
   ],
   "routes": [
-    { "src": "/cron/(.*)", "dest": "backend/cron/$1" },
-    { "src": "/(.*)", "dest": "backend/index.js" }
-  ],
-  "functions": {
-    "backend/cron/*.js": { "maxDuration": 30, "memory": 1024 }
-  }
+    {
+      "src": "/(.*)",
+      "dest": "/backend/index.js"
+    }
+  ]
 }
