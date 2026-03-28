@@ -10,17 +10,27 @@
       "memory": 1024
     }
   },
+  "routes": [
+    {
+      "src": "/cron/(.*)",
+      "dest": "backend/cron/$1.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "backend/api/index.js"
+    }
+  ],
   "crons": [
     {
-      "path": "/backend/cron/tranlation-processor",
+      "path": "/cron/tranlation-processor",
       "schedule": "*/5 * * * *"
     },
     {
-      "path": "/backend/cron/title-gen-processor",
+      "path": "/cron/title-gen-processor",
       "schedule": "*/10 * * * *"
     },
     {
-      "path": "/backend/cron/title-extractor-processor",
+      "path": "/cron/title-extractor-processor",
       "schedule": "*/15 * * * *"
     }
   ]
