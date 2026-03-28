@@ -1,3 +1,4 @@
+
 const mongoose = require('mongoose');
 const path = require('path');
 const AdmZip = require('adm-zip');
@@ -200,8 +201,8 @@ module.exports = function(app, verifyToken, verifyAdmin, upload) {
 
             await job.save();
 
-            // 🔥 تم إزالة الاستدعاء المباشر للمعالج. ستتم المعالجة بواسطة Cron Job.
-            // processTitleExtractionJob(job._id);
+            // 🔥 Start Worker in Background (No await)
+            processTitleExtractionJob(job._id);
 
             res.json({ success: true, message: "تم بدء المهمة في الخلفية", jobId: job._id });
 
