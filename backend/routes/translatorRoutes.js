@@ -471,16 +471,17 @@ module.exports = function(app, verifyToken, verifyAdmin) {
             
             // 🔥 Resume existing job
             if (jobId) {
-                const existingJob = await TranslationJob.findById(jobId);
-                if (!existingJob) return res.status(404).json({ message: "Job not found" });
-                
-                existingJob.status = 'active';
-                existingJob.logs.push({ message: '▶️ تم استئناف المهمة', type: 'info' });
-                await existingJob.save();
-                
-                processTranslationJob(existingJob._id);
-                return res.json({ message: "Job resumed", jobId: existingJob._id });
-            }
+    const existingJob = await TranslationJob.findById(jobId);
+    if (!existingJob) return res.status(404).json({ message: "Job not found" });
+    
+    existingJob.status = 'active';
+    existingJob.logs.push({ message: '▶️ تم استئناف المهمة', type: 'info' });
+    await existingJob.save();
+    
+    // 🔥 تم إزالة الاستدعاء المباشر للمعالج. ستتم المعالجة بواسطة Cron Job.
+    // processTranslationJob(existingJob._id);
+    return res.json({ message: "Job resumed", jobId: existingJob._id });
+}
 
             const novel = await Novel.findById(novelId);
             if (!novel) return res.status(404).json({ message: "Novel not found" });
@@ -507,20 +508,21 @@ module.exports = function(app, verifyToken, verifyAdmin) {
             }
 
             const job = new TranslationJob({
-                novelId,
-                novelTitle: novel.title,
-                cover: novel.cover,
-                targetChapters,
-                totalToTranslate: targetChapters.length,
-                apiKeys: effectiveKeys,
-                logs: [{ message: `تم بدء المهمة (استهداف ${targetChapters.length} فصل) باستخدام ${effectiveKeys.length} مفتاح`, type: 'info' }]
-            });
+    novelId,
+    novelTitle: novel.title,
+    cover: novel.cover,
+    targetChapters,
+    totalToTranslate: targetChapters.length,
+    apiKeys: effectiveKeys,
+    logs: [{ message: `تم بدء المهمة (استهداف ${targetChapters.length} فصل) باستخدام ${effectiveKeys.length} مفتاح`, type: 'info' }]
+});
 
-            await job.save();
+await job.save();
 
-            processTranslationJob(job._id);
+// 🔥 تم إزالة الاستدعاء المباشر للمعالج. ستتم المعالجة بواسطة Cron Job.
+// processTranslationJob(job._id);
 
-            res.json({ message: "Job started", jobId: job._id });
+res.json({ message: "Job started", jobId: job._id });
         } catch (e) {
             res.status(500).json({ error: e.message });
         }
