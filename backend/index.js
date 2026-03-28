@@ -1,6 +1,3 @@
-
-
-
 // =================================================================
 // 1. التحميل اليدوي لمتغيرات البيئة
 // =================================================================
@@ -113,7 +110,13 @@ require('./routes/titleGenRoutes')(app, verifyToken, verifyAdmin);
 // تحميل المسارات العامة
 require('./routes/publicRoutes')(app, verifyToken, upload);
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-});
+// Export for Vercel serverless
+module.exports = app;
+
+// Only listen if this file is run directly (not imported)
+if (require.main === module) {
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, () => {
+        console.log(`🚀 Server running on port ${PORT}`);
+    });
+}
