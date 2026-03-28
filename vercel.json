@@ -1,0 +1,54 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/index.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "cron/*.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "api/index.js"
+    },
+    {
+      "src": "/cron/(.*)",
+      "dest": "cron/$1"
+    }
+  ],
+  "functions": {
+    "api/index.js": {
+      "maxDuration": 30,
+      "memory": 1024
+    },
+    "cron/*.js": {
+      "maxDuration": 30,
+      "memory": 1024
+    }
+  },
+  "crons": [
+    {
+      "path": "/cron/translation-processor",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/cron/title-gen-processor",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/cron/title-extractor-processor",
+      "schedule": "*/15 * * * *"
+    }
+  ],
+  "env": {
+    "MONGODB_URI": "@mongodb_uri",
+    "JWT_SECRET": "@jwt_secret",
+    "CRON_SECRET": "@cron_secret",
+    "GOOGLE_CLIENT_ID": "@google_client_id",
+    "GOOGLE_CLIENT_SECRET": "@google_client_secret"
+  }
+}
