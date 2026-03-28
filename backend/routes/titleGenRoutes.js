@@ -229,17 +229,16 @@ module.exports = function(app, verifyToken, verifyAdmin) {
             
             // Resume
             if (jobId) {
-    const existingJob = await TitleGenJob.findById(jobId);
-    if (!existingJob) return res.status(404).json({ message: "Job not found" });
-    
-    existingJob.status = 'active';
-    existingJob.logs.push({ message: '▶️ تم استئناف المهمة', type: 'info' });
-    await existingJob.save();
-    
-    // 🔥 تم إزالة الاستدعاء المباشر للمعالج. ستتم المعالجة بواسطة Cron Job.
-    // processTitleGenJob(existingJob._id);
-    return res.json({ message: "Job resumed", jobId: existingJob._id });
-}
+                const existingJob = await TitleGenJob.findById(jobId);
+                if (!existingJob) return res.status(404).json({ message: "Job not found" });
+                
+                existingJob.status = 'active';
+                existingJob.logs.push({ message: '▶️ تم استئناف المهمة', type: 'info' });
+                await existingJob.save();
+                
+                processTitleGenJob(existingJob._id);
+                return res.json({ message: "Job resumed", jobId: existingJob._id });
+            }
 
             const novel = await Novel.findById(novelId);
             if (!novel) return res.status(404).json({ message: "Novel not found" });
@@ -252,20 +251,19 @@ module.exports = function(app, verifyToken, verifyAdmin) {
             }
 
             const job = new TitleGenJob({
-    novelId,
-    novelTitle: novel.title,
-    cover: novel.cover,
-    targetChapters,
-    totalToProcess: targetChapters.length,
-    logs: [{ message: `تم بدء مهمة توليد العناوين لـ ${targetChapters.length} فصل`, type: 'info' }]
-});
+                novelId,
+                novelTitle: novel.title,
+                cover: novel.cover,
+                targetChapters,
+                totalToProcess: targetChapters.length,
+                logs: [{ message: `تم بدء مهمة توليد العناوين لـ ${targetChapters.length} فصل`, type: 'info' }]
+            });
 
-await job.save();
+            await job.save();
 
-// 🔥 تم إزالة الاستدعاء المباشر للمعالج. ستتم المعالجة بواسطة Cron Job.
-// processTitleGenJob(job._id);
+            processTitleGenJob(job._id);
 
-res.json({ message: "Job started", jobId: job._id });
+            res.json({ message: "Job started", jobId: job._id });
         } catch (e) {
             res.status(500).json({ error: e.message });
         }
