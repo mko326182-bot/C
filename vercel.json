@@ -22,15 +22,15 @@
   ],
   "crons": [
     {
-      "path": "/cron/tranlation-processor",
+      "path": "/backend/cron/tranlation-processor",
       "schedule": "*/5 * * * *"
     },
     {
-      "path": "/cron/title-gen-processor",
+      "path": "/backend/cron/title-gen-processor",
       "schedule": "*/10 * * * *"
     },
     {
-      "path": "/cron/title-extractor-processor",
+      "path": "/backend/cron/title-extractor-processor",
       "schedule": "*/15 * * * *"
     }
   ]
