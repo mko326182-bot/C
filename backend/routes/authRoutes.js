@@ -200,7 +200,7 @@ module.exports = function(app, verifyToken) {
     const oauth2Client = new OAuth2Client(
         process.env.GOOGLE_CLIENT_ID,
         process.env.GOOGLE_CLIENT_SECRET,
-        "https://c-production-fba1.up.railway.app/auth/google/callback" 
+        "https://backend-moon-lilac.vercel.app/auth/google/callback" 
     );
 
     app.get('/auth/google', (req, res) => {
@@ -262,11 +262,11 @@ module.exports = function(app, verifyToken) {
                 const deepLink = state === 'mobile' ? `aplcionszeus://auth?token=${token}` : `${state}?token=${token}`;
                 res.redirect(deepLink);
             } else {
-                res.redirect(`https://c-production-fba1.up.railway.app/?token=${token}`);
+                res.redirect(`https://backend-moon-lilac.vercel.app/?token=${token}`);
             }
         } catch (error) {
             console.error('Auth error:', error);
-            res.redirect('https://c-production-fba1.up.railway.app/?auth_error=true');
+            res.redirect('https://backend-moon-lilac.vercel.app/?auth_error=true');
         }
     });
 
